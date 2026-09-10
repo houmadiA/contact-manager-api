@@ -1,0 +1,53 @@
+name: contact-manager
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-contactmanager}
+      POSTGRES_USER: ${POSTGRES_USER:-contactmanager}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-contactmanager}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-contactmanager} -d ${POSTGRES_DB:-contactmanager}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-contactmanager}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-contactmanager}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-contactmanager}
+      CONTACT_MANAGER_JWT_SECRET: ${CONTACT_MANAGER_JWT_SECRET:-dev-only-secret-please-change-me-32-bytes-min}
+      CONTACT_MANAGER_CORS_ORIGINS: ${CONTACT_MANAGER_CORS_ORIGINS:-http://localhost:4200}
+      CONTACT_MANAGER_COOKIE_SECURE: ${CONTACT_MANAGER_COOKIE_SECURE:-true}
+      CONTACT_MANAGER_COOKIE_SAME_SITE: ${CONTACT_MANAGER_COOKIE_SAME_SITE:-Strict}
+    ports:
+      - '8080:8080'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:8080/actuator/health/readiness']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  web:
+    build:
+      context: ../contact-manager-frontend
+    ports:
+      - '4200:80'
+    depends_on:
+      api:
+        condition: service_started
+
+volumes:
+  postgres-data:
